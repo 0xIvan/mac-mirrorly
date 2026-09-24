@@ -15,7 +15,7 @@ The app uses only `https://portal.mirrorly.xyz/api/account/me`, `/auth/login`, `
 
 ## Build
 
-Requires macOS 13 or newer, Xcode, and [XcodeGen](https://github.com/yonaskolb/XcodeGen).
+Requires macOS 14 or newer, Xcode, and [XcodeGen](https://github.com/yonaskolb/XcodeGen).
 
 ```sh
 brew install xcodegen
