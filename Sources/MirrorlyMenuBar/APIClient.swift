@@ -1,4 +1,5 @@
 import Foundation
+import OSLog
 
 enum APIError: LocalizedError {
     case unauthorized
@@ -22,6 +23,7 @@ enum APIError: LocalizedError {
 
 final class APIClient {
     private let baseURL = URL(string: "https://portal.mirrorly.xyz/api")!
+    private let logger = Logger(subsystem: "com.ivan.mirrorlymenubar", category: "positions")
     private let session: URLSession
 
     init() {
@@ -38,15 +40,37 @@ final class APIClient {
         try await get("/account/me")
     }
 
+    func accountPnLStatistics() async throws -> AccountPnLStatistics {
+        try await get("/account/statistics/pnl")
+    }
+
     func copytraders() async throws -> [Copytrader] {
         let response: CopytraderList = try await get("/copytrader")
         return response.copytraders ?? []
     }
 
-    func positions(for copytraderID: String) async throws -> [OpenPosition] {
+    func positions(for copytraderID: String) async throws -> OpenPositionsResponse {
         guard UUID(uuidString: copytraderID) != nil else { throw APIError.invalidCopytraderID }
-        let response: OpenPositionsResponse = try await get("/copytrader/\(copytraderID)/position/open")
-        return response.data.filter(\.isOpenCopy)
+        do {
+            let response: OpenPositionsResponse = try await get("/copytrader/\(copytraderID)/position/open")
+            let copiedCount = response.data.filter(\.isCopied).count
+            logger.notice("Open positions response: \(response.data.count, privacy: .public) rows, \(copiedCount, privacy: .public) copied")
+            return response
+        } catch let error as DecodingError {
+            let path: String
+            switch error {
+            case let .typeMismatch(_, context), let .valueNotFound(_, context),
+                 let .keyNotFound(_, context), let .dataCorrupted(context):
+                path = context.codingPath.map(\.stringValue).joined(separator: ".")
+            @unknown default:
+                path = "unknown"
+            }
+            logger.error("Open positions response could not be decoded at \(path, privacy: .public)")
+            throw error
+        } catch {
+            logger.error("Open positions request failed: \(String(describing: type(of: error)), privacy: .public)")
+            throw error
+        }
     }
 
     func login(email: String, password: String, rememberMe: Bool) async throws {
@@ -90,6 +114,9 @@ final class APIClient {
         }
         if response.statusCode == 401 { throw APIError.unauthorized }
         guard (200...299).contains(response.statusCode) else {
+            if path.hasSuffix("/position/open") {
+                logger.error("Open positions HTTP \(response.statusCode, privacy: .public)")
+            }
             let problem = try? JSONDecoder().decode(ProblemDetails.self, from: data)
             throw APIError.server(response.statusCode, problem?.detail ?? problem?.title ?? "")
         }

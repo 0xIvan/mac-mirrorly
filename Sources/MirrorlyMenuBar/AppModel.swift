@@ -13,9 +13,13 @@ final class AppModel: ObservableObject {
     @Published private(set) var sessionState: SessionState = .checking
     @Published private(set) var copytraders: [Copytrader] = []
     @Published private(set) var positionsByCopytrader: [String: [OpenPosition]] = [:]
+    @Published private(set) var positionMetaByCopytrader: [String: OpenPositionsMeta] = [:]
+    @Published private(set) var positionErrorsByCopytrader: [String: String] = [:]
     @Published private(set) var selectedIDs: Set<String> = []
+    @Published private(set) var pnl24H: Decimal?
     @Published private(set) var lastUpdated: Date?
     @Published private(set) var refreshError: String?
+    @Published private(set) var pnl24HError: String?
     @Published private(set) var sessionError: String?
     @Published private(set) var loginError: String?
     @Published private(set) var isSigningIn = false
@@ -43,10 +47,6 @@ final class AppModel: ObservableObject {
         selectedCopytraders.reduce(0) { $0 + $1.equity }
     }
 
-    var selectedUnrealizedPnL: Decimal {
-        selectedCopytraders.reduce(0) { $0 + $1.unrealizedPnL }
-    }
-
     var dataWarning: String? {
         if let refreshError {
             if lastUpdated == nil {
@@ -56,6 +56,9 @@ final class AppModel: ObservableObject {
         }
         if let lastUpdated, Date().timeIntervalSince(lastUpdated) > 120 {
             return "Data delayed · Last updated " + lastUpdated.formatted(date: .omitted, time: .shortened)
+        }
+        if let pnl24HError {
+            return "24h PnL unavailable. " + pnl24HError
         }
         return nil
     }
@@ -107,9 +110,13 @@ final class AppModel: ObservableObject {
         userID = nil
         copytraders = []
         positionsByCopytrader = [:]
+        positionMetaByCopytrader = [:]
+        positionErrorsByCopytrader = [:]
         selectedIDs = []
+        pnl24H = nil
         lastUpdated = nil
         refreshError = nil
+        pnl24HError = nil
         sessionState = .signedOut
     }
 
@@ -147,22 +154,49 @@ final class AppModel: ObservableObject {
             }
 
             var latestPositions: [String: [OpenPosition]] = [:]
+            var latestPositionMeta: [String: OpenPositionsMeta] = [:]
+            var latestPositionErrors: [String: String] = [:]
             for copytrader in latestCopytraders where selectedIDs.contains(copytrader.id) {
-                latestPositions[copytrader.id] = try await api.positions(for: copytrader.id)
+                do {
+                    let response = try await api.positions(for: copytrader.id)
+                    latestPositions[copytrader.id] = response.data
+                    latestPositionMeta[copytrader.id] = response.meta
+                } catch APIError.unauthorized {
+                    throw APIError.unauthorized
+                } catch {
+                    latestPositionErrors[copytrader.id] = error.localizedDescription
+                    latestPositions[copytrader.id] = positionsByCopytrader[copytrader.id]
+                    latestPositionMeta[copytrader.id] = positionMetaByCopytrader[copytrader.id]
+                }
             }
 
-            // Publish the list and its position snapshots together so totals never mix refresh cycles.
             copytraders = latestCopytraders.sorted { $0.displayName.localizedCaseInsensitiveCompare($1.displayName) == .orderedAscending }
             positionsByCopytrader = latestPositions
+            positionMetaByCopytrader = latestPositionMeta
+            positionErrorsByCopytrader = latestPositionErrors
             lastUpdated = Date()
             refreshError = nil
+
+            do {
+                pnl24H = try await api.accountPnLStatistics().totalPnL24H
+                pnl24HError = nil
+            } catch APIError.unauthorized {
+                throw APIError.unauthorized
+            } catch {
+                pnl24H = nil
+                pnl24HError = error.localizedDescription
+            }
         } catch APIError.unauthorized {
             pollTask?.cancel()
             api.clearCookies()
             userID = nil
             copytraders = []
             positionsByCopytrader = [:]
+            positionMetaByCopytrader = [:]
+            positionErrorsByCopytrader = [:]
             selectedIDs = []
+            pnl24H = nil
+            pnl24HError = nil
             sessionState = .signedOut
         } catch {
             refreshError = error.localizedDescription
