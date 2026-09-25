@@ -2,7 +2,7 @@ import Foundation
 import AppKit
 import SwiftUI
 import XCTest
-@testable import MirrorlyMenuBar
+@testable import MacMirrorly
 
 final class ContractDecodingTests: XCTestCase {
     @MainActor

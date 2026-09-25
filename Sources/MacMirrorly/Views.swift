@@ -61,7 +61,7 @@ private struct BrandHeader: View {
                 .scaledToFit()
                 .foregroundStyle(Palette.accent)
                 .frame(width: 32, height: 32)
-            Text("Mirrorly")
+            Text("MacMirrorly")
                 .font(.headline)
             Spacer()
             if showPortalLink {

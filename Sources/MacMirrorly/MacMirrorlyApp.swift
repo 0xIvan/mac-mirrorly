@@ -2,7 +2,7 @@ import AppKit
 import SwiftUI
 
 @main
-struct MirrorlyMenuBarApp: App {
+struct MacMirrorlyApp: App {
     @StateObject private var model = AppModel()
 
     var body: some Scene {
@@ -13,7 +13,7 @@ struct MirrorlyMenuBarApp: App {
                 Image(nsImage: MenuBarStatusImage.make(
                     amount: model.sessionState == .signedIn ? Money.whole(model.selectedEquity) : nil
                 ))
-                    .accessibilityLabel("Mirrorly")
+                    .accessibilityLabel("MacMirrorly")
                 if model.sessionState == .signedIn, model.dataWarning != nil {
                     Image(systemName: "exclamationmark.circle.fill")
                         .foregroundStyle(.orange)

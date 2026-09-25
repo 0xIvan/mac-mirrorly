@@ -1,4 +1,4 @@
-# Mirrorly Menu Bar
+# MacMirrorly
 
 A small native macOS menu bar app for reading selected Mirrorly copytraders' equity and open copied positions.
 
@@ -23,13 +23,13 @@ Requires macOS 14 or newer, Xcode, and [XcodeGen](https://github.com/yonaskolb/X
 ```sh
 brew install xcodegen
 xcodegen generate
-open MirrorlyMenuBar.xcodeproj
+open MacMirrorly.xcodeproj
 ```
 
-Select the `MirrorlyMenuBar` scheme and run. For a command-line check:
+Select the `MacMirrorly` scheme and run. For a command-line check:
 
 ```sh
-xcodebuild test -project MirrorlyMenuBar.xcodeproj -scheme MirrorlyMenuBar -destination 'platform=macOS' CODE_SIGNING_ALLOWED=NO
+xcodebuild test -project MacMirrorly.xcodeproj -scheme MacMirrorly -destination 'platform=macOS' CODE_SIGNING_ALLOWED=NO
 ```
 
 The app is a menu bar accessory (`LSUIElement`) and uses the macOS App Sandbox outgoing-network entitlement. It makes native `URLSession` requests to the portal's HTTPS `/api` route; browser CORS origin policies do not apply to those requests.

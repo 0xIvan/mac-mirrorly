@@ -23,7 +23,7 @@ enum APIError: LocalizedError {
 
 final class APIClient {
     private let baseURL = URL(string: "https://portal.mirrorly.xyz/api")!
-    private let logger = Logger(subsystem: "com.ivan.mirrorlymenubar", category: "positions")
+    private let logger = Logger(subsystem: "com.ivan.macmirrorly", category: "positions")
     private let session: URLSession
 
     init() {
