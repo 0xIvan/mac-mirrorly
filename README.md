@@ -34,6 +34,27 @@ xcodebuild test -project MacMirrorly.xcodeproj -scheme MacMirrorly -destination 
 
 The app is a menu bar accessory (`LSUIElement`) and uses the macOS App Sandbox outgoing-network entitlement. It makes native `URLSession` requests to the portal's HTTPS `/api` route; browser CORS origin policies do not apply to those requests.
 
+## DMG distribution
+
+The app builds for both Apple silicon and Intel Macs. A DMG contains `MacMirrorly.app` and an `Applications` shortcut so users can drag the app into Applications. To make a local packaging preview from an already signed app:
+
+```sh
+scripts/package-dmg.sh /Applications/MacMirrorly.app dist/MacMirrorly-local-preview.dmg
+```
+
+This local preview is not a public release. The current local signing certificate is not a Developer ID certificate, so Gatekeeper rejects the app on another Mac. For direct distribution, install a **Developer ID Application** certificate, save notarization credentials in a `notarytool` keychain profile, and run:
+
+```sh
+xcrun notarytool store-credentials macmirrorly-release --apple-id 'you@example.com' --team-id 'TEAMID'
+export MAC_MIRRORLY_DEVELOPER_ID='Developer ID Application: Your Name (TEAMID)'
+export MAC_MIRRORLY_NOTARY_PROFILE=macmirrorly-release
+scripts/release-dmg.sh
+```
+
+The release script builds a universal Release app, signs it with the hardened runtime and a secure timestamp, creates and signs the DMG, submits it to Apple for notarization, staples the ticket, and checks the result. Publish only the completed `dist/MacMirrorly-<version>.dmg`. Each new release should increment the version and build number in `Resources/Info.plist` and be tested after drag-installing on a separate Mac. Direct downloads do not include automatic updates.
+
+Mirrorly sign-in currently supports email and password only. Accounts requiring Google, Web3, or two-factor sign-in cannot use this companion yet.
+
 ## Verification limits
 
-The macOS GitHub Actions workflow builds and runs contract-decoding tests. A real account is needed to verify login, session persistence, and live copytrader data in the running app.
+The macOS GitHub Actions workflow builds and runs contract-decoding tests. A real account is needed to verify login, session persistence, and live copytrader data in the running app. A Developer ID-signed and notarized drag-install still needs testing on another Mac before public release.
