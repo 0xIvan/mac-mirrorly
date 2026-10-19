@@ -21,6 +21,10 @@ private func leverageColor(_ leverage: Decimal, in scheme: ColorScheme) -> Color
     leverage <= 1 ? Palette.positive(in: scheme) : leverage < 3 ? .orange : Palette.negative(in: scheme)
 }
 
+private func displayedValue(_ value: String, hidden: Bool) -> String {
+    hidden ? "••••" : value
+}
+
 struct MenuPopover: View {
     @ObservedObject var model: AppModel
 
@@ -77,16 +81,31 @@ private struct SummaryMetric: View {
     let title: String
     let value: String
     var color: Color = .primary
+    var valuesHidden = false
+    var onToggleVisibility: (() -> Void)?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 2) {
-            Text(title.uppercased())
-                .font(.caption2.weight(.semibold))
-                .foregroundStyle(.secondary)
-            Text(value)
+            HStack(spacing: 5) {
+                Text(title.uppercased())
+                    .font(.caption2.weight(.semibold))
+                    .foregroundStyle(.secondary)
+                if let onToggleVisibility {
+                    Button(action: onToggleVisibility) {
+                        Image(systemName: valuesHidden ? "eye.slash" : "eye")
+                            .font(.caption2)
+                            .offset(y: -1)
+                    }
+                    .buttonStyle(.plain)
+                    .foregroundStyle(.secondary)
+                    .accessibilityLabel(valuesHidden ? "Show values" : "Hide values")
+                    .help(valuesHidden ? "Show values" : "Hide values")
+                }
+            }
+            Text(displayedValue(value, hidden: valuesHidden))
                 .font(.title3.weight(.semibold))
                 .monospacedDigit()
-                .foregroundStyle(color)
+                .foregroundStyle(valuesHidden ? .primary : color)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
     }
@@ -168,12 +187,18 @@ private struct DashboardView: View {
                 WarningBanner(message: dataWarning, isError: model.refreshError != nil)
             }
             HStack(spacing: 14) {
-                SummaryMetric(title: "Total equity", value: Money.whole(model.selectedEquity))
+                SummaryMetric(
+                    title: "Total equity",
+                    value: Money.whole(model.selectedEquity),
+                    valuesHidden: model.valuesHidden,
+                    onToggleVisibility: model.toggleValuesHidden
+                )
                 Divider().frame(height: 36)
                 SummaryMetric(
                     title: "24h PnL",
                     value: model.pnl24H.map(Money.signed) ?? "—",
-                    color: model.pnl24H.map { pnlColor($0, in: colorScheme) } ?? .primary
+                    color: model.pnl24H.map { pnlColor($0, in: colorScheme) } ?? .primary,
+                    valuesHidden: model.valuesHidden
                 )
             }
 
@@ -206,9 +231,10 @@ private struct PositionsCard: View {
     @ObservedObject var model: AppModel
     @Environment(\.colorScheme) private var colorScheme
     @State private var scrollMetrics = PositionScrollMetrics()
+    @State private var contentHeight: CGFloat?
 
     private func visiblePositions(for copytrader: Copytrader) -> [OpenPosition] {
-        (model.positionsByCopytrader[copytrader.id] ?? []).filter(\.isCopied)
+        OpenPosition.newestCopiedFirst(model.positionsByCopytrader[copytrader.id] ?? [])
     }
 
     private var positionCount: Int {
@@ -223,24 +249,22 @@ private struct PositionsCard: View {
         })
     }
 
-    private var contentHeight: CGFloat {
-        min(max(CGFloat(positionCount) * 52 + CGFloat(model.selectedCopytraders.count) * 42, 64), 260)
-    }
-
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             VStack(spacing: 5) {
-                PositionTotalRow(title: "OPEN POSITIONS", value: String(positionCount))
-                PositionTotalRow(title: "NOTIONAL", value: Money.twoDecimals(totals.notional))
+                PositionTotalRow(title: "OPEN POSITIONS", value: String(positionCount), valuesHidden: model.valuesHidden)
+                PositionTotalRow(title: "NOTIONAL", value: Money.twoDecimals(totals.notional), valuesHidden: model.valuesHidden)
                 PositionTotalRow(
                     title: "UPNL",
                     value: Money.signed(totals.unrealizedPnL),
-                    color: pnlColor(totals.unrealizedPnL, in: colorScheme)
+                    color: pnlColor(totals.unrealizedPnL, in: colorScheme),
+                    valuesHidden: model.valuesHidden
                 )
                 PositionTotalRow(
                     title: "LEVERAGE",
                     value: Money.leverage(totals.leverage),
-                    color: leverageColor(totals.leverage, in: colorScheme)
+                    color: leverageColor(totals.leverage, in: colorScheme),
+                    valuesHidden: model.valuesHidden
                 )
             }
             .padding(.bottom, 12)
@@ -258,12 +282,19 @@ private struct PositionsCard: View {
                             CopytraderPositionsGroup(
                                 copytrader: copytrader,
                                 positions: visiblePositions(for: copytrader),
-                                error: model.positionErrorsByCopytrader[copytrader.id]
+                                error: model.positionErrorsByCopytrader[copytrader.id],
+                                valuesHidden: model.valuesHidden
                             )
                         }
                     }
                 }
                 .padding(.trailing, 6)
+                .fixedSize(horizontal: false, vertical: true)
+                .onGeometryChange(for: CGFloat.self) { geometry in
+                    geometry.size.height
+                } action: { height in
+                    contentHeight = height
+                }
                 .background(
                     NativeScrollerHider { metrics in
                         scrollMetrics = metrics
@@ -272,7 +303,7 @@ private struct PositionsCard: View {
                 )
             }
             .scrollIndicators(.hidden)
-            .frame(height: contentHeight)
+            .frame(height: min(contentHeight ?? 260, 260))
             .overlay(alignment: .topTrailing) {
                 if scrollMetrics.height > scrollMetrics.viewportHeight + 1,
                    scrollMetrics.viewportHeight > 0 {
@@ -305,6 +336,7 @@ private struct PositionTotalRow: View {
     let title: String
     let value: String
     var color: Color = .primary
+    var valuesHidden = false
 
     var body: some View {
         HStack(spacing: 8) {
@@ -312,11 +344,11 @@ private struct PositionTotalRow: View {
                 .font(.caption2.weight(.semibold))
                 .foregroundStyle(.secondary)
             Spacer(minLength: 8)
-            Text(value)
+            Text(displayedValue(value, hidden: valuesHidden))
                 .font(.subheadline.weight(.semibold))
                 .monospacedDigit()
                 .lineLimit(1)
-                .foregroundStyle(color)
+                .foregroundStyle(valuesHidden ? .primary : color)
         }
     }
 }
@@ -407,6 +439,7 @@ private struct CopytraderPositionsGroup: View {
     let copytrader: Copytrader
     let positions: [OpenPosition]
     let error: String?
+    let valuesHidden: Bool
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
@@ -421,13 +454,16 @@ private struct CopytraderPositionsGroup: View {
             .padding(.top, 6)
 
             if !copytrader.activeAlarms.isEmpty {
-                Text("\(copytrader.activeAlarms.count) alert\(copytrader.activeAlarms.count == 1 ? "" : "s")")
+                Text(valuesHidden
+                     ? "Alerts active"
+                     : "\(copytrader.activeAlarms.count) alert\(copytrader.activeAlarms.count == 1 ? "" : "s")")
                     .font(.caption2.weight(.semibold))
                     .foregroundStyle(.orange)
             }
 
             ForEach(copytrader.activeAlarms.indices, id: \.self) { index in
-                Label(copytrader.activeAlarms[index].displayMessage, systemImage: "exclamationmark.triangle.fill")
+                Label(valuesHidden ? "Alert active" : copytrader.activeAlarms[index].displayMessage,
+                      systemImage: "exclamationmark.triangle.fill")
                     .font(.caption)
                     .foregroundStyle(.orange)
                     .fixedSize(horizontal: false, vertical: true)
@@ -447,7 +483,7 @@ private struct CopytraderPositionsGroup: View {
                     .padding(.vertical, 5)
             } else {
                 ForEach(positions.indices, id: \.self) { index in
-                    PositionRow(position: positions[index])
+                    PositionRow(position: positions[index], valuesHidden: valuesHidden)
                 }
             }
         }
@@ -457,6 +493,7 @@ private struct CopytraderPositionsGroup: View {
 private struct PositionRow: View {
     @Environment(\.colorScheme) private var colorScheme
     let position: OpenPosition
+    let valuesHidden: Bool
 
     var body: some View {
         if let copy = position.copy {
@@ -480,9 +517,9 @@ private struct PositionRow: View {
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
                 VStack(alignment: .trailing, spacing: 3) {
-                    Text(Money.twoDecimals(copy.size))
-                    Text(Money.signed(copy.unrealizedPnl))
-                        .foregroundStyle(pnlColor(copy.unrealizedPnl, in: colorScheme))
+                    Text(displayedValue(Money.twoDecimals(copy.size), hidden: valuesHidden))
+                    Text(displayedValue(Money.signed(copy.unrealizedPnl), hidden: valuesHidden))
+                        .foregroundStyle(valuesHidden ? .primary : pnlColor(copy.unrealizedPnl, in: colorScheme))
                 }
                 .monospacedDigit()
             }
@@ -554,9 +591,9 @@ struct SettingsWindow: View {
                     .frame(maxWidth: .infinity, alignment: .leading)
             } else {
                 HStack(spacing: 14) {
-                    SummaryMetric(title: "Total equity", value: Money.whole(model.totalEquity))
+                    SummaryMetric(title: "Total equity", value: Money.whole(model.totalEquity), valuesHidden: model.valuesHidden)
                     Divider().frame(height: 36)
-                    SummaryMetric(title: "Selected equity", value: Money.whole(model.selectedEquity))
+                    SummaryMetric(title: "Selected equity", value: Money.whole(model.selectedEquity), valuesHidden: model.valuesHidden)
                 }
 
                 VStack(alignment: .leading, spacing: 0) {
@@ -633,10 +670,10 @@ private struct SettingsCopytraderRow: View {
                 Text(copytrader.exchangeRef ?? "—")
                     .lineLimit(1)
                     .frame(width: 90, alignment: .leading)
-                Text(Money.whole(copytrader.equity))
+                Text(displayedValue(Money.whole(copytrader.equity), hidden: model.valuesHidden))
                     .frame(width: 82, alignment: .trailing)
-                Text(Money.signed(copytrader.unrealizedPnL))
-                    .foregroundStyle(pnlColor(copytrader.unrealizedPnL, in: colorScheme))
+                Text(displayedValue(Money.signed(copytrader.unrealizedPnL), hidden: model.valuesHidden))
+                    .foregroundStyle(model.valuesHidden ? .primary : pnlColor(copytrader.unrealizedPnL, in: colorScheme))
                     .frame(width: 82, alignment: .trailing)
             }
             .font(.caption)
@@ -645,7 +682,8 @@ private struct SettingsCopytraderRow: View {
             .padding(.bottom, copytrader.activeAlarms.isEmpty ? 11 : 2)
 
             ForEach(copytrader.activeAlarms.indices, id: \.self) { index in
-                Label(copytrader.activeAlarms[index].displayMessage, systemImage: "exclamationmark.triangle.fill")
+                Label(model.valuesHidden ? "Alert active" : copytrader.activeAlarms[index].displayMessage,
+                      systemImage: "exclamationmark.triangle.fill")
                     .font(.caption)
                     .foregroundStyle(.orange)
                     .frame(maxWidth: .infinity, alignment: .leading)

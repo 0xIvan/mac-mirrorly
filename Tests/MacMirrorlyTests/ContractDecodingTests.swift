@@ -94,4 +94,11 @@ final class ContractDecodingTests: XCTestCase {
         XCTAssertEqual(totals.leverage, Decimal(string: "1.44"))
         XCTAssertNotNil(Money.leverage(totals.leverage).range(of: #"^1[.,]4×$"#, options: .regularExpression))
     }
+
+    func testCopiedPositionsSortByCopyOpenedNewestFirst() throws {
+        let data = Data(#"[{"copy":{"symbol":"OLD","isLong":true,"opened":"2026-09-24T09:00:00Z","size":1,"unrealizedPnl":0,"status":"open"}},{"copy":{"symbol":"NO DATE","isLong":true,"size":1,"unrealizedPnl":0,"status":"open"}},{"copy":{"symbol":"NEW","isLong":true,"opened":"2026-09-24T15:00:00.1234567+04:00","size":1,"unrealizedPnl":0,"status":"open"}},{"trader":{"symbol":"FOLLOWED"}},{"copy":{"symbol":"SAME","isLong":true,"opened":"2026-09-24T09:00:00Z","size":1,"unrealizedPnl":0,"status":"open"}}]"#.utf8)
+        let positions = try JSONDecoder().decode([OpenPosition].self, from: data)
+
+        XCTAssertEqual(OpenPosition.newestCopiedFirst(positions).map(\.symbol), ["NEW", "OLD", "SAME", "NO DATE"])
+    }
 }

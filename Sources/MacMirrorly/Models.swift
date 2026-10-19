@@ -79,6 +79,23 @@ struct OpenPosition: Decodable {
     let copy: CopiedPosition?
     let trader: FollowedTrader?
 
+    static func newestCopiedFirst(_ positions: [OpenPosition]) -> [OpenPosition] {
+        positions.enumerated()
+            .compactMap { index, position -> (index: Int, position: OpenPosition, opened: Date?)? in
+                guard position.isCopied else { return nil }
+                return (index, position, position.copy?.opened.flatMap(PositionDate.parse))
+            }
+            .sorted { lhs, rhs in
+                switch (lhs.opened, rhs.opened) {
+                case let (left?, right?) where left != right: return left > right
+                case (_?, nil): return true
+                case (nil, _?): return false
+                default: return lhs.index < rhs.index
+                }
+            }
+            .map(\.position)
+    }
+
     var symbol: String { copy?.symbol ?? trader?.symbol ?? "Unknown" }
     var traderName: String { trader?.name ?? "Unknown trader" }
     var isCopied: Bool { copy != nil }
@@ -98,9 +115,23 @@ struct OpenPosition: Decodable {
 struct CopiedPosition: Decodable {
     let symbol: String?
     let isLong: Bool
+    let opened: String?
     let size: Decimal
     let unrealizedPnl: Decimal
     let status: String
+}
+
+private enum PositionDate {
+    private static let fractional: ISO8601DateFormatter = {
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        return formatter
+    }()
+    private static let wholeSeconds = ISO8601DateFormatter()
+
+    static func parse(_ value: String) -> Date? {
+        return fractional.date(from: value) ?? wholeSeconds.date(from: value)
+    }
 }
 
 struct FollowedTrader: Decodable {

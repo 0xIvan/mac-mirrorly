@@ -24,6 +24,7 @@ final class AppModel: ObservableObject {
     @Published private(set) var loginError: String?
     @Published private(set) var isSigningIn = false
     @Published private(set) var isRefreshing = false
+    @Published private(set) var valuesHidden = UserDefaults.standard.bool(forKey: "valuesHidden")
 
     private let api = APIClient()
     private var userID: String?
@@ -45,6 +46,11 @@ final class AppModel: ObservableObject {
 
     var selectedEquity: Decimal {
         selectedCopytraders.reduce(0) { $0 + $1.equity }
+    }
+
+    func toggleValuesHidden() {
+        valuesHidden.toggle()
+        UserDefaults.standard.set(valuesHidden, forKey: "valuesHidden")
     }
 
     var dataWarning: String? {
