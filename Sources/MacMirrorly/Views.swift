@@ -640,6 +640,7 @@ private struct ModeBadge: View {
 
 struct SettingsWindow: View {
     @ObservedObject var model: AppModel
+    @ObservedObject var updater: AppUpdater
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
@@ -674,6 +675,16 @@ struct SettingsWindow: View {
                 .background(Color.primary.opacity(0.055), in: RoundedRectangle(cornerRadius: 9))
                 .overlay(RoundedRectangle(cornerRadius: 9).stroke(Color.primary.opacity(0.08)))
             }
+            Divider()
+            HStack {
+                Text("Version \(Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "—")")
+                    .foregroundStyle(.secondary)
+                Spacer()
+                Button("Check for Updates…", action: updater.checkForUpdates)
+                    .disabled(!updater.canCheckForUpdates)
+            }
+            .font(.caption)
+            .controlSize(.small)
             Divider()
             HStack(spacing: 8) {
                 Button("Sign out") { Task { await model.signOut() } }

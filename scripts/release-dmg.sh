@@ -38,9 +38,22 @@ staged_dmg="$build_dir/$(basename "$output_dmg")"
 ditto "$built_app" "$app_path"
 lipo "$app_path/Contents/MacOS/MacMirrorly" -verify_arch arm64
 lipo "$app_path/Contents/MacOS/MacMirrorly" -verify_arch x86_64
+sparkle_dir="$("$root_dir/scripts/sparkle.sh")"
+cp "$sparkle_dir/LICENSE" "$app_path/Contents/Resources/Sparkle-LICENSE.txt"
+framework="$app_path/Contents/Frameworks/Sparkle.framework"
+# Sign nested helpers before their framework; the downloader has its own entitlements.
+for component in \
+  Versions/B/XPCServices/Downloader.xpc \
+  Versions/B/XPCServices/Installer.xpc \
+  Versions/B/Autoupdate \
+  Versions/B/Updater.app; do
+  codesign --force --sign "$sign_identity" --options runtime --timestamp \
+    --preserve-metadata=identifier,entitlements "$framework/$component"
+done
+codesign --force --sign "$sign_identity" --options runtime --timestamp "$framework"
 codesign --force --sign "$sign_identity" --options runtime --timestamp \
   --entitlements "$root_dir/Resources/MacMirrorly.entitlements" "$app_path"
-codesign --verify --strict --verbose=2 "$app_path"
+codesign --verify --deep --strict --verbose=2 "$app_path"
 codesign -d --entitlements :- "$app_path" > "$build_dir/entitlements.plist" 2>/dev/null
 if [[ "$(/usr/libexec/PlistBuddy -c 'Print :com.apple.security.get-task-allow' "$build_dir/entitlements.plist" 2>/dev/null || true)" == "true" ]]; then
   echo "Release app must not allow debugging." >&2

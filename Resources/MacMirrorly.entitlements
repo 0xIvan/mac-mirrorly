@@ -4,5 +4,10 @@
 <dict>
     <key>com.apple.security.app-sandbox</key><true/>
     <key>com.apple.security.network.client</key><true/>
+    <key>com.apple.security.temporary-exception.mach-lookup.global-name</key>
+    <array>
+        <string>com.ivan.macmirrorly-spks</string>
+        <string>com.ivan.macmirrorly-spki</string>
+    </array>
 </dict>
 </plist>

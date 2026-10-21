@@ -9,10 +9,18 @@
     <key>CFBundleInfoDictionaryVersion</key><string>6.0</string>
     <key>CFBundleName</key><string>MacMirrorly</string>
     <key>CFBundlePackageType</key><string>APPL</string>
-    <key>CFBundleShortVersionString</key><string>1.0.1</string>
-    <key>CFBundleVersion</key><string>2</string>
+    <key>CFBundleShortVersionString</key><string>1.0.2</string>
+    <key>CFBundleVersion</key><string>3</string>
     <key>LSMinimumSystemVersion</key><string>14.0</string>
     <key>LSUIElement</key><true/>
     <key>NSHighResolutionCapable</key><true/>
+    <key>SUPublicEDKey</key><string>1GM+8avhaIxjZhfIHOgvV36G9hQAoyky0e2HRQ7IFso=</string>
+    <key>SUFeedURL</key><string>https://github.com/0xIvan/mac-mirrorly/releases/latest/download/appcast.xml</string>
+    <key>SUEnableInstallerLauncherService</key><true/>
+    <key>SUEnableAutomaticChecks</key><false/>
+    <key>SUAutomaticallyUpdate</key><false/>
+    <key>SUEnableSystemProfiling</key><false/>
+    <key>SURequireSignedFeed</key><true/>
+    <key>SUVerifyUpdateBeforeExtraction</key><true/>
 </dict>
 </plist>

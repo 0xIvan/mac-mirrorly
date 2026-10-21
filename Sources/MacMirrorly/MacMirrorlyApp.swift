@@ -4,6 +4,7 @@ import SwiftUI
 @main
 struct MacMirrorlyApp: App {
     @StateObject private var model = AppModel()
+    @StateObject private var updater = AppUpdater()
 
     var body: some Scene {
         MenuBarExtra {
@@ -28,7 +29,7 @@ struct MacMirrorlyApp: App {
         .menuBarExtraStyle(.window)
 
         Settings {
-            SettingsWindow(model: model)
+            SettingsWindow(model: model, updater: updater)
         }
         .windowResizability(.contentSize)
     }

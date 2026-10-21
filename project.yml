@@ -1,5 +1,6 @@
 name: MacMirrorly
 options:
+  preGenCommand: scripts/sparkle.sh > /dev/null
   deploymentTarget:
     macOS: "14.0"
 settings:
@@ -12,6 +13,10 @@ targets:
     sources:
       - path: Sources/MacMirrorly
       - path: Resources/Assets.xcassets
+    dependencies:
+      - framework: .build/dependencies/Sparkle-2.10.0/Sparkle.framework
+        embed: true
+        codeSign: false
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.ivan.macmirrorly
@@ -27,6 +32,8 @@ targets:
       - path: Tests/MacMirrorlyTests
     dependencies:
       - target: MacMirrorly
+      - framework: .build/dependencies/Sparkle-2.10.0/Sparkle.framework
+        embed: false
 schemes:
   MacMirrorly:
     build:
