@@ -231,6 +231,7 @@ private struct PositionsCard: View {
     @ObservedObject var model: AppModel
     @Environment(\.colorScheme) private var colorScheme
     @State private var scrollMetrics = PositionScrollMetrics()
+    @State private var scrollController = PositionScrollController()
     @State private var contentHeight: CGFloat?
 
     private func visiblePositions(for copytrader: Copytrader) -> [OpenPosition] {
@@ -288,7 +289,6 @@ private struct PositionsCard: View {
                         }
                     }
                 }
-                .padding(.trailing, 6)
                 .fixedSize(horizontal: false, vertical: true)
                 .onGeometryChange(for: CGFloat.self) { geometry in
                     geometry.size.height
@@ -296,7 +296,7 @@ private struct PositionsCard: View {
                     contentHeight = height
                 }
                 .background(
-                    NativeScrollerHider { metrics in
+                    NativeScrollerHider(controller: scrollController) { metrics in
                         scrollMetrics = metrics
                     }
                     .frame(width: 0, height: 0)
@@ -304,25 +304,14 @@ private struct PositionsCard: View {
             }
             .scrollIndicators(.hidden)
             .frame(height: min(contentHeight ?? 260, 260))
+            // Keep the scrollbar gutter outside the scrollable content's layout.
+            .padding(.trailing, 16)
             .overlay(alignment: .topTrailing) {
                 if scrollMetrics.height > scrollMetrics.viewportHeight + 1,
                    scrollMetrics.viewportHeight > 0 {
-                    let viewportHeight = scrollMetrics.viewportHeight
-                    let thumbHeight = max(22, viewportHeight * viewportHeight / scrollMetrics.height)
-                    let scrollRange = scrollMetrics.height - viewportHeight
-                    let progress = min(max(scrollMetrics.offset / scrollRange, 0), 1)
-                    ZStack(alignment: .top) {
-                        Capsule()
-                            .fill(Color.secondary.opacity(0.18))
-                            .frame(width: 4, height: viewportHeight)
-                        Capsule()
-                            .fill(Color.secondary.opacity(0.7))
-                            .frame(width: 4, height: thumbHeight)
-                            .offset(y: progress * (viewportHeight - thumbHeight))
+                    PositionScrollbar(metrics: scrollMetrics) { offset in
+                        scrollController.scroll(to: offset)
                     }
-                    .offset(x: -2)
-                    .allowsHitTesting(false)
-                    .accessibilityHidden(true)
                 }
             }
         }
@@ -353,18 +342,88 @@ private struct PositionTotalRow: View {
     }
 }
 
+private struct PositionScrollbar: View {
+    let metrics: PositionScrollMetrics
+    let onScroll: (CGFloat) -> Void
+    @State private var dragStartOffset: CGFloat?
+
+    var body: some View {
+        let viewportHeight = metrics.viewportHeight
+        let thumbHeight = min(viewportHeight, max(22, viewportHeight * viewportHeight / metrics.height))
+        let scrollRange = metrics.height - viewportHeight
+        let thumbTravel = viewportHeight - thumbHeight
+        let progress = min(max(metrics.offset / scrollRange, 0), 1)
+        let thumbOffset = progress * thumbTravel
+
+        ZStack(alignment: .top) {
+            Capsule()
+                .fill(Color.secondary.opacity(0.18))
+                .frame(width: 4, height: viewportHeight)
+            Capsule()
+                .fill(Color.secondary.opacity(0.7))
+                .frame(width: 4, height: thumbHeight)
+                .offset(y: thumbOffset)
+        }
+        .frame(width: 12, height: viewportHeight)
+        .contentShape(Rectangle())
+        .gesture(
+            DragGesture(minimumDistance: 0)
+                .onChanged { value in
+                    guard thumbTravel > 0 else { return }
+                    if dragStartOffset == nil {
+                        let startedOnThumb = value.startLocation.y >= thumbOffset
+                            && value.startLocation.y <= thumbOffset + thumbHeight
+                        dragStartOffset = startedOnThumb
+                            ? thumbOffset
+                            : value.startLocation.y - thumbHeight / 2
+                    }
+                    let offset = (dragStartOffset ?? 0) + value.translation.height
+                    onScroll(min(max(offset / thumbTravel, 0), 1) * scrollRange)
+                }
+                .onEnded { _ in dragStartOffset = nil }
+        )
+        .accessibilityLabel("Positions scroll position")
+        .accessibilityValue("\(Int(progress * 100)) percent")
+        .accessibilityAdjustableAction { direction in
+            switch direction {
+            case .increment: onScroll(min(metrics.offset + viewportHeight, scrollRange))
+            case .decrement: onScroll(max(metrics.offset - viewportHeight, 0))
+            @unknown default: break
+            }
+        }
+    }
+}
+
+final class PositionScrollController {
+    weak var scrollView: NSScrollView?
+
+    func scroll(to offset: CGFloat) {
+        guard let scrollView, let documentView = scrollView.documentView else { return }
+        let clipView = scrollView.contentView
+        let range = max(0, documentView.frame.height - clipView.bounds.height)
+        let clampedOffset = min(max(offset, 0), range)
+        let y = documentView.isFlipped ? clampedOffset : range - clampedOffset
+        let bounds = NSRect(origin: NSPoint(x: clipView.bounds.minX, y: y), size: clipView.bounds.size)
+        clipView.scroll(to: clipView.constrainBoundsRect(bounds).origin)
+        scrollView.reflectScrolledClipView(clipView)
+    }
+}
+
 struct NativeScrollerHider: NSViewRepresentable {
+    var controller: PositionScrollController? = nil
     var onMetricsChange: ((PositionScrollMetrics) -> Void)?
 
     func makeNSView(context: Context) -> NativeScrollerHiderView { NativeScrollerHiderView() }
 
     func updateNSView(_ nsView: NativeScrollerHiderView, context: Context) {
+        nsView.controller = controller
         nsView.onMetricsChange = onMetricsChange
         nsView.hideScroller()
     }
 }
 
 final class NativeScrollerHiderView: NSView {
+    var controller: PositionScrollController?
     private weak var configuredScrollView: NSScrollView?
     private var scrollerObservation: NSKeyValueObservation?
     private var scrollObservation: NSObjectProtocol?
@@ -385,6 +444,7 @@ final class NativeScrollerHiderView: NSView {
     func hideScroller() {
         DispatchQueue.main.async { [weak self] in
             guard let self, let scrollView = self.enclosingScrollView else { return }
+            self.controller?.scrollView = scrollView
             if self.configuredScrollView !== scrollView {
                 if let scrollObservation = self.scrollObservation { NotificationCenter.default.removeObserver(scrollObservation) }
                 if let contentObservation = self.contentObservation { NotificationCenter.default.removeObserver(contentObservation) }
