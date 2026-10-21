@@ -1,4 +1,5 @@
-## MacMirrorly 1.0.3
+## MacMirrorly 1.0.4
 
-- Opening Settings now hides the menu bar popover before bringing Settings forward.
-- Copytrader selection, account information, and the update controls are unchanged.
+- Redesigned Settings with separate Copytraders and General tabs.
+- Made selected equity more prominent and improved copytrader names, exchange details, status, and financial column alignment.
+- Grouped account actions and software updates into native macOS settings sections.

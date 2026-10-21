@@ -654,76 +654,122 @@ struct SettingsWindow: View {
     @ObservedObject var updater: AppUpdater
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            BrandHeader()
-            if model.sessionState != .signedIn {
-                Text("Sign in from the menu bar to choose copytraders.")
+        TabView {
+            copytraders
+                .tabItem { Label("Copytraders", systemImage: "person.2") }
+            general
+                .tabItem { Label("General", systemImage: "gearshape") }
+        }
+        .frame(width: 660, height: 520)
+    }
+
+    private var copytraders: some View {
+        VStack(alignment: .leading, spacing: 24) {
+            VStack(alignment: .leading, spacing: 6) {
+                Text("Copytraders")
+                    .font(.title2.weight(.bold))
+                Text("Choose the copytraders shown in your menu bar.")
+                    .foregroundStyle(.secondary)
+            }
+
+            if model.sessionState == .signedIn {
+                HStack(alignment: .firstTextBaseline) {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("Selected equity")
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
+                        Text(displayedValue(Money.whole(model.selectedEquity), hidden: model.valuesHidden))
+                            .font(.system(size: 28, weight: .semibold, design: .rounded))
+                            .monospacedDigit()
+                    }
+                    Spacer()
+                    VStack(alignment: .trailing, spacing: 4) {
+                        Text("Total account equity")
+                        Text(displayedValue(Money.whole(model.totalEquity), hidden: model.valuesHidden))
+                            .monospacedDigit()
+                    }
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+                }
+
+                VStack(spacing: 0) {
+                    HStack(spacing: 16) {
+                        Text("Copytrader")
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                        Text("Equity").frame(width: 94, alignment: .trailing)
+                        Text("Unrealized P&L").frame(width: 112, alignment: .trailing)
+                    }
+                    .font(.caption.weight(.medium))
+                    .foregroundStyle(.secondary)
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 12)
+                    Divider()
+                    if model.copytraders.isEmpty {
+                        ContentUnavailableView("No copytraders", systemImage: "person.2",
+                                               description: Text("Your copytraders will appear here once added in the Mirrorly portal."))
+                            .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    } else {
+                        ScrollView {
+                            LazyVStack(spacing: 0) {
+                                ForEach(model.copytraders) { copytrader in
+                                    SettingsCopytraderRow(model: model, copytrader: copytrader)
+                                }
+                            }
+                        }
+                        .scrollIndicators(.visible)
+                    }
+                }
+                .background(.background, in: RoundedRectangle(cornerRadius: 10))
+                .overlay(RoundedRectangle(cornerRadius: 10).stroke(.separator.opacity(0.5)))
+
+                Text("Changes apply immediately to your menu bar.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
-                    .frame(maxWidth: .infinity, alignment: .leading)
             } else {
-                HStack(spacing: 14) {
-                    SummaryMetric(title: "Total equity", value: Money.whole(model.totalEquity), valuesHidden: model.valuesHidden)
-                    Divider().frame(height: 36)
-                    SummaryMetric(title: "Selected equity", value: Money.whole(model.selectedEquity), valuesHidden: model.valuesHidden)
-                }
-
-                VStack(alignment: .leading, spacing: 0) {
-                    Text("YOUR COPYTRADERS")
-                        .font(.caption2.weight(.semibold))
-                        .foregroundStyle(.secondary)
-                        .padding(.bottom, 8)
-                    SettingsTableHeader()
-                    Divider().padding(.top, 5)
-                    ScrollView {
-                        ForEach(model.copytraders) { copytrader in
-                            SettingsCopytraderRow(model: model, copytrader: copytrader)
-                        }
-                    }
-                    .frame(height: min(max(CGFloat(model.copytraders.count) * 50, 44), 250))
-                }
-                .padding(11)
-                .background(Color.primary.opacity(0.055), in: RoundedRectangle(cornerRadius: 9))
-                .overlay(RoundedRectangle(cornerRadius: 9).stroke(Color.primary.opacity(0.08)))
+                ContentUnavailableView("Sign in to choose copytraders", systemImage: "person.crop.circle",
+                                       description: Text("Open MacMirrorly in the menu bar to sign in."))
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
-            Divider()
-            HStack {
-                Text("Version \(Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "—")")
-                    .foregroundStyle(.secondary)
-                Spacer()
-                Button("Check for Updates…", action: updater.checkForUpdates)
-                    .disabled(!updater.canCheckForUpdates)
-            }
-            .font(.caption)
-            .controlSize(.small)
-            Divider()
-            HStack(spacing: 8) {
-                Button("Sign out") { Task { await model.signOut() } }
-                    .buttonStyle(.borderless)
-                    .controlSize(.small)
-                    .disabled(model.sessionState != .signedIn)
-                Spacer()
-                Link("Open Mirrorly portal ↗", destination: URL(string: "https://portal.mirrorly.xyz/")!)
-            }
-            .font(.caption)
         }
-        .padding(16)
-        .frame(width: 582)
+        .padding(28)
     }
-}
 
-private struct SettingsTableHeader: View {
-    var body: some View {
-        HStack(spacing: 8) {
-            Text("Show").frame(width: 34, alignment: .leading)
-            Text("Copytrader").frame(width: 120, alignment: .leading)
-            Text("Status").frame(width: 80, alignment: .leading)
-            Text("Exchange").frame(width: 90, alignment: .leading)
-            Text("Equity").frame(width: 82, alignment: .trailing)
-            Text("UPnL").frame(width: 82, alignment: .trailing)
+    private var general: some View {
+        Form {
+            Section {
+                LabeledContent("Mirrorly account") {
+                    Text(model.sessionState == .signedIn ? "Signed in" : "Not signed in")
+                        .foregroundStyle(.secondary)
+                }
+                LabeledContent("Manage your account") {
+                    Link(destination: URL(string: "https://portal.mirrorly.xyz/")!) {
+                        Label("Open Mirrorly portal", systemImage: "arrow.up.right")
+                    }
+                }
+                LabeledContent("Session") {
+                    Button("Sign Out") { Task { await model.signOut() } }
+                        .disabled(model.sessionState != .signedIn)
+                }
+            } header: {
+                Text("Account")
+            }
+
+            Section {
+                LabeledContent("Installed version") {
+                    Text(Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "—")
+                        .foregroundStyle(.secondary)
+                }
+                LabeledContent("Software updates") {
+                    Button("Check for Updates…", action: updater.checkForUpdates)
+                        .disabled(!updater.canCheckForUpdates)
+                }
+            } header: {
+                Text("Updates")
+            } footer: {
+                Text("Check for new versions of MacMirrorly. You choose when to download and install an update.")
+            }
         }
-        .font(.caption2)
-        .foregroundStyle(.secondary)
+        .formStyle(.grouped)
     }
 }
 
@@ -734,34 +780,39 @@ private struct SettingsCopytraderRow: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            HStack(spacing: 8) {
-                Toggle("Show \(copytrader.displayName)", isOn: Binding(
-                    get: { model.selectedIDs.contains(copytrader.id) },
-                    set: { model.setSelected($0, for: copytrader.id) }
-                ))
-                .labelsHidden()
-                .toggleStyle(.checkbox)
-                .tint(Palette.accent)
-                .frame(width: 34, alignment: .leading)
-                Text(copytrader.displayName)
-                    .fontWeight(.semibold)
-                    .lineLimit(1)
-                    .frame(width: 120, alignment: .leading)
-                ModeBadge(mode: copytrader.displayMode)
-                    .frame(width: 80, alignment: .leading)
-                Text(copytrader.exchangeRef ?? "—")
-                    .lineLimit(1)
-                    .frame(width: 90, alignment: .leading)
+            HStack(spacing: 16) {
+                HStack(spacing: 12) {
+                    Toggle("Show \(copytrader.displayName)", isOn: Binding(
+                        get: { model.selectedIDs.contains(copytrader.id) },
+                        set: { model.setSelected($0, for: copytrader.id) }
+                    ))
+                    .labelsHidden()
+                    .toggleStyle(.checkbox)
+                    .tint(Palette.accent)
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text(copytrader.displayName)
+                            .font(.body.weight(.semibold))
+                            .lineLimit(1)
+                        HStack(spacing: 8) {
+                            Text(copytrader.exchangeRef ?? "—")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                                .lineLimit(1)
+                            ModeBadge(mode: copytrader.displayMode)
+                        }
+                    }
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
                 Text(displayedValue(Money.whole(copytrader.equity), hidden: model.valuesHidden))
-                    .frame(width: 82, alignment: .trailing)
+                    .frame(width: 94, alignment: .trailing)
                 Text(displayedValue(Money.signed(copytrader.unrealizedPnL), hidden: model.valuesHidden))
                     .foregroundStyle(model.valuesHidden ? .primary : pnlColor(copytrader.unrealizedPnL, in: colorScheme))
-                    .frame(width: 82, alignment: .trailing)
+                    .frame(width: 112, alignment: .trailing)
             }
-            .font(.caption)
+            .font(.body)
             .monospacedDigit()
-            .padding(.top, 11)
-            .padding(.bottom, copytrader.activeAlarms.isEmpty ? 11 : 2)
+            .padding(.horizontal, 16)
+            .padding(.vertical, 14)
 
             ForEach(copytrader.activeAlarms.indices, id: \.self) { index in
                 Label(model.valuesHidden ? "Alert active" : copytrader.activeAlarms[index].displayMessage,
@@ -769,7 +820,7 @@ private struct SettingsCopytraderRow: View {
                     .font(.caption)
                     .foregroundStyle(.orange)
                     .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(.leading, 42)
+                    .padding(.leading, 44)
                     .padding(.bottom, 7)
             }
             Divider()
