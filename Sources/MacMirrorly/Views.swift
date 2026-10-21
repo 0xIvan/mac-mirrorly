@@ -175,8 +175,16 @@ private struct SignInView: View {
     }
 }
 
+private struct MenuWindowAnchor: NSViewRepresentable {
+    let view: NSView
+
+    func makeNSView(context: Context) -> NSView { view }
+    func updateNSView(_ nsView: NSView, context: Context) {}
+}
+
 private struct DashboardView: View {
     @ObservedObject var model: AppModel
+    @State private var menuWindowAnchor = NSView()
     @Environment(\.openSettings) private var openSettings
     @Environment(\.colorScheme) private var colorScheme
 
@@ -207,6 +215,8 @@ private struct DashboardView: View {
             Divider()
             HStack(spacing: 8) {
                 Button {
+                    // Hide the popover before opening Settings moves focus to another window.
+                    menuWindowAnchor.window?.orderOut(nil)
                     openSettings()
                     NSApp.activate(ignoringOtherApps: true)
                 } label: {
@@ -224,6 +234,7 @@ private struct DashboardView: View {
                 .controlSize(.small)
             }
         }
+        .background(MenuWindowAnchor(view: menuWindowAnchor).frame(width: 0, height: 0))
     }
 }
 

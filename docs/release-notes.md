@@ -1,7 +1,4 @@
-## MacMirrorly 1.0.2
+## MacMirrorly 1.0.3
 
-- Added **Check for Updates…** and the installed version to Settings.
-- Updates are downloaded from GitHub and verified using Sparkle signatures and Apple code signing.
-- Background update checks and automatic installation are disabled.
-
-Install this release manually once to gain the updater. Version 1.0.1 and earlier cannot update themselves.
+- Opening Settings now hides the menu bar popover before bringing Settings forward.
+- Copytrader selection, account information, and the update controls are unchanged.
