@@ -36,8 +36,8 @@ built_app="$build_dir/DerivedData/Build/Products/Release/MacMirrorly.app"
 app_path="$build_dir/MacMirrorly.app"
 staged_dmg="$build_dir/$(basename "$output_dmg")"
 ditto "$built_app" "$app_path"
-lipo -verify_arch arm64 "$app_path/Contents/MacOS/MacMirrorly"
-lipo -verify_arch x86_64 "$app_path/Contents/MacOS/MacMirrorly"
+lipo "$app_path/Contents/MacOS/MacMirrorly" -verify_arch arm64
+lipo "$app_path/Contents/MacOS/MacMirrorly" -verify_arch x86_64
 codesign --force --sign "$sign_identity" --options runtime --timestamp \
   --entitlements "$root_dir/Resources/MacMirrorly.entitlements" "$app_path"
 codesign --verify --strict --verbose=2 "$app_path"
