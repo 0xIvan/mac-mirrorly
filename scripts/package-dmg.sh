@@ -33,7 +33,7 @@ chmod 755 "$staging_dir"
 ditto "$app_path" "$staging_dir/MacMirrorly.app"
 codesign --verify --strict "$staging_dir/MacMirrorly.app"
 ln -s /Applications "$staging_dir/Applications"
-diskutil image create from --volumeName MacMirrorly --format UDZO "$staging_dir" "$output_dmg"
+hdiutil create -volname MacMirrorly -srcfolder "$staging_dir" -format UDZO "$output_dmg"
 
 if [[ -n "$sign_identity" ]]; then
   codesign --sign "$sign_identity" --timestamp \

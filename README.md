@@ -2,6 +2,21 @@
 
 A small native macOS menu bar app for reading selected Mirrorly copytraders' equity and open copied positions.
 
+## Install
+
+Download the DMG from [GitHub Releases](https://github.com/0xIvan/mac-mirrorly/releases/latest).
+
+Requires macOS 14 or newer. The universal DMG supports Apple silicon and Intel Macs.
+Open the DMG, drag **MacMirrorly** into **Applications**, eject the image, then open the app.
+It runs in the menu bar without a Dock icon. Sign in with your own Mirrorly email and password.
+Google, Web3, and two-factor sign-in are not supported.
+
+The download contains no account credentials or sessions. Passwords are sent over HTTPS to
+Mirrorly and are not saved by the app. “Stay signed in” stores a session cookie in this app's
+macOS cookie store, outside the app bundle. Sign out to clear the local session.
+Copytrader selections and value visibility preferences are saved locally. No analytics SDK
+is included. Updates require downloading and installing a newer DMG.
+
 ## Features
 
 - Menu bar M and combined equity for selected copytraders
@@ -42,7 +57,7 @@ The app builds for both Apple silicon and Intel Macs. A DMG contains `MacMirrorl
 scripts/package-dmg.sh /Applications/MacMirrorly.app dist/MacMirrorly-local-preview.dmg
 ```
 
-This local preview is not a public release. The current local signing certificate is not a Developer ID certificate, so Gatekeeper rejects the app on another Mac. For direct distribution, install a **Developer ID Application** certificate, save notarization credentials in a `notarytool` keychain profile, and run:
+This local preview is not a public release. A build signed with a local development certificate will be rejected by Gatekeeper on another Mac. For direct distribution, install a **Developer ID Application** certificate, save notarization credentials in a `notarytool` keychain profile, and run:
 
 ```sh
 xcrun notarytool store-credentials macmirrorly-release --apple-id 'you@example.com' --team-id 'TEAMID'
@@ -51,7 +66,7 @@ export MAC_MIRRORLY_NOTARY_PROFILE=macmirrorly-release
 scripts/release-dmg.sh
 ```
 
-The release script builds a universal Release app, signs it with the hardened runtime and a secure timestamp, creates and signs the DMG, submits it to Apple for notarization, staples the ticket, and checks the result. Publish only the completed `dist/MacMirrorly-<version>.dmg`. Each new release should increment the version and build number in `Resources/Info.plist` and be tested after drag-installing on a separate Mac. Direct downloads do not include automatic updates.
+The release script builds a universal Release app, signs it with the hardened runtime and a secure timestamp, notarizes and staples the app, then creates, signs, notarizes, and staples the DMG. It validates both tickets and Gatekeeper acceptance, checks image integrity, and writes a SHA-256 checksum. Publish only the completed `dist/MacMirrorly-<version>-universal.dmg` and its `.sha256` file to a stable GitHub Release whose tag matches the version, such as `v1.0.1`. Failed signing or notarization does not produce a final distribution image. Each new release should increment the version and build number in `Resources/Info.plist` and be tested after drag-installing on a separate Mac. Direct downloads do not include automatic updates.
 
 Mirrorly sign-in currently supports email and password only. Accounts requiring Google, Web3, or two-factor sign-in cannot use this companion yet.
 

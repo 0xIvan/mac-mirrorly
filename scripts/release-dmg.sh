@@ -15,10 +15,10 @@ if [[ -z "$notary_profile" ]]; then
 fi
 
 version="$(/usr/libexec/PlistBuddy -c 'Print CFBundleShortVersionString' "$root_dir/Resources/Info.plist")"
-output_dmg="${1:-$root_dir/dist/MacMirrorly-$version.dmg}"
+output_dmg="${1:-$root_dir/dist/MacMirrorly-$version-universal.dmg}"
 mkdir -p "$(dirname "$output_dmg")"
 output_dmg="$(cd "$(dirname "$output_dmg")" && pwd)/$(basename "$output_dmg")"
-if [[ -e "$output_dmg" ]]; then
+if [[ -e "$output_dmg" || -e "$output_dmg.sha256" ]]; then
   echo "Output already exists: $output_dmg" >&2
   exit 1
 fi
@@ -34,22 +34,44 @@ xcodebuild build -project MacMirrorly.xcodeproj -scheme MacMirrorly \
 
 built_app="$build_dir/DerivedData/Build/Products/Release/MacMirrorly.app"
 app_path="$build_dir/MacMirrorly.app"
+staged_dmg="$build_dir/$(basename "$output_dmg")"
 ditto "$built_app" "$app_path"
 lipo -verify_arch arm64 "$app_path/Contents/MacOS/MacMirrorly"
 lipo -verify_arch x86_64 "$app_path/Contents/MacOS/MacMirrorly"
 codesign --force --sign "$sign_identity" --options runtime --timestamp \
   --entitlements "$root_dir/Resources/MacMirrorly.entitlements" "$app_path"
 codesign --verify --strict --verbose=2 "$app_path"
-
-"$root_dir/scripts/package-dmg.sh" "$app_path" "$output_dmg" "$sign_identity"
-notary_result="$(xcrun notarytool submit "$output_dmg" \
-  --keychain-profile "$notary_profile" --wait --output-format json)"
-printf '%s\n' "$notary_result"
-if [[ "$(printf '%s' "$notary_result" | jq -r '.status')" != "Accepted" ]]; then
-  echo "Apple did not accept the notarization request." >&2
+codesign -d --entitlements :- "$app_path" > "$build_dir/entitlements.plist" 2>/dev/null
+if [[ "$(/usr/libexec/PlistBuddy -c 'Print :com.apple.security.get-task-allow' "$build_dir/entitlements.plist" 2>/dev/null || true)" == "true" ]]; then
+  echo "Release app must not allow debugging." >&2
   exit 1
 fi
-xcrun stapler staple "$output_dmg"
-xcrun stapler validate "$output_dmg"
-spctl --assess --type open --context context:primary-signature --verbose "$output_dmg"
-shasum -a 256 "$output_dmg"
+
+notarize() {
+  local artifact="$1"
+  local result
+  result="$(xcrun notarytool submit "$artifact" \
+    --keychain-profile "$notary_profile" --wait --output-format json)"
+  printf '%s\n' "$result"
+  if [[ "$(printf '%s' "$result" | jq -r '.status')" != "Accepted" ]]; then
+    echo "Apple did not accept the notarization request for $artifact." >&2
+    exit 1
+  fi
+}
+
+# Staple the app before packaging so its ticket survives copying off the DMG.
+ditto -c -k --keepParent "$app_path" "$build_dir/notarize.zip"
+notarize "$build_dir/notarize.zip"
+xcrun stapler staple "$app_path"
+xcrun stapler validate "$app_path"
+spctl --assess --type execute --verbose=2 "$app_path"
+
+"$root_dir/scripts/package-dmg.sh" "$app_path" "$staged_dmg" "$sign_identity"
+notarize "$staged_dmg"
+xcrun stapler staple "$staged_dmg"
+xcrun stapler validate "$staged_dmg"
+spctl --assess --type open --context context:primary-signature --verbose=2 "$staged_dmg"
+hdiutil verify "$staged_dmg"
+mv "$staged_dmg" "$output_dmg"
+(cd "$(dirname "$output_dmg")" && shasum -a 256 "$(basename "$output_dmg")" > "$output_dmg.sha256")
+cat "$output_dmg.sha256"
