@@ -1,4 +1,5 @@
 import AppKit
+import ServiceManagement
 import SwiftUI
 
 private enum Palette {
@@ -25,11 +26,65 @@ private func displayedValue(_ value: String, hidden: Bool) -> String {
     hidden ? "••••" : value
 }
 
+private struct ActionButton: View {
+    let title: String
+    var symbol: String? = nil
+    var bordered = true
+    let action: () -> Void
+
+    var body: some View {
+        // SwiftUI otherwise supplies regular sizing to the embedded native button.
+        NativeActionButton(title: title, symbol: symbol, bordered: bordered, action: action)
+            .controlSize(.small)
+            .fixedSize()
+    }
+}
+
+private struct NativeActionButton: NSViewRepresentable {
+    @Environment(\.isEnabled) private var isEnabled
+    let title: String
+    let symbol: String?
+    let bordered: Bool
+    let action: () -> Void
+
+    func makeCoordinator() -> Coordinator { Coordinator(action: action) }
+
+    func makeNSView(context: Context) -> NSButton {
+        let button = NSButton(title: title, target: context.coordinator, action: #selector(Coordinator.performAction))
+        button.bezelStyle = .rounded
+        button.controlSize = .small
+        button.font = .systemFont(ofSize: NSFont.smallSystemFontSize)
+        button.imageHugsTitle = true
+        button.setContentHuggingPriority(.required, for: .horizontal)
+        return button
+    }
+
+    func updateNSView(_ button: NSButton, context: Context) {
+        context.coordinator.action = action
+        button.title = title
+        button.controlSize = .small
+        button.font = .systemFont(ofSize: NSFont.smallSystemFontSize)
+        button.isEnabled = isEnabled
+        button.isBordered = bordered
+        button.contentTintColor = bordered ? nil : .secondaryLabelColor
+        button.image = symbol.flatMap { NSImage(systemSymbolName: $0, accessibilityDescription: nil) }?
+            .withSymbolConfiguration(.init(pointSize: NSFont.smallSystemFontSize, weight: .regular))
+        button.imagePosition = symbol == nil ? .noImage : .imageLeading
+        button.invalidateIntrinsicContentSize()
+    }
+
+    final class Coordinator: NSObject {
+        var action: () -> Void
+        init(action: @escaping () -> Void) { self.action = action }
+        @objc func performAction() { action() }
+    }
+}
+
 struct MenuPopover: View {
     @ObservedObject var model: AppModel
 
     var body: some View {
-        Group {
+        VStack(spacing: 14) {
             switch model.sessionState {
             case .checking:
                 VStack(spacing: 14) {
@@ -41,13 +96,29 @@ struct MenuPopover: View {
                 VStack(alignment: .leading, spacing: 14) {
                     BrandHeader()
                     WarningBanner(message: model.sessionError ?? "Could not reach Mirrorly", isError: true)
-                    Button("Retry connection") { Task { await model.restoreSession() } }
+                    ActionButton(title: "Retry connection") { Task { await model.restoreSession() } }
                 }
             case .signedOut:
                 SignInView(model: model)
             case .signedIn:
                 DashboardView(model: model)
             }
+            Divider()
+            if model.sessionState == .signedIn {
+                HStack(spacing: 8) {
+                    if let lastUpdated = model.lastUpdated {
+                        Text("Updated \(lastUpdated.formatted(.dateTime.hour(.twoDigits(amPM: .omitted)).minute(.twoDigits)))")
+                    } else {
+                        Text("Not updated yet")
+                    }
+                    Spacer()
+                    ActionButton(title: model.isRefreshing ? "Refreshing…" : "Refresh") {
+                        Task { await model.refresh() }
+                    }
+                    .disabled(model.isRefreshing)
+                }
+            }
+            MenuControls()
         }
         .padding(16)
         .frame(width: 284)
@@ -134,6 +205,15 @@ private struct SignInView: View {
     @State private var password = ""
     @State private var rememberMe = true
 
+    private var canSignIn: Bool {
+        !email.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && !password.isEmpty && !model.isSigningIn
+    }
+
+    private func signIn() {
+        guard canSignIn else { return }
+        Task { await model.signIn(email: email, password: password, rememberMe: rememberMe) }
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
             BrandHeader()
@@ -150,28 +230,23 @@ private struct SignInView: View {
             if let loginError = model.loginError {
                 WarningBanner(message: loginError, isError: true)
             }
-            Button {
-                Task { await model.signIn(email: email, password: password, rememberMe: rememberMe) }
-            } label: {
+            Button(action: signIn) {
                 if model.isSigningIn { ProgressView().controlSize(.small) }
                 else { Text("Sign in") }
             }
             .buttonStyle(.borderedProminent)
+            .font(.system(size: NSFont.smallSystemFontSize))
             .controlSize(.small)
             .tint(Palette.accent)
-            .disabled(email.isEmpty || password.isEmpty || model.isSigningIn)
+            .keyboardShortcut(.defaultAction)
+            .disabled(!canSignIn)
             Text("Email and password accounts only. Google, Web3, and two-factor sign-in are not supported yet.")
                 .font(.caption)
                 .foregroundStyle(.secondary)
-            HStack {
-                Link("Open Mirrorly portal ↗", destination: URL(string: "https://portal.mirrorly.xyz/")!)
-                Spacer()
-                Button("Quit") { NSApp.terminate(nil) }
-                    .buttonStyle(.borderless)
-            }
-            .font(.caption)
-            .controlSize(.small)
+            Link("Open Mirrorly portal ↗", destination: URL(string: "https://portal.mirrorly.xyz/")!)
+                .font(.caption)
         }
+        .onSubmit(signIn)
     }
 }
 
@@ -184,8 +259,6 @@ private struct MenuWindowAnchor: NSViewRepresentable {
 
 private struct DashboardView: View {
     @ObservedObject var model: AppModel
-    @State private var menuWindowAnchor = NSView()
-    @Environment(\.openSettings) private var openSettings
     @Environment(\.colorScheme) private var colorScheme
 
     var body: some View {
@@ -197,7 +270,7 @@ private struct DashboardView: View {
             HStack(spacing: 14) {
                 SummaryMetric(
                     title: "Total equity",
-                    value: Money.whole(model.selectedEquity),
+                    value: Money.twoDecimals(model.selectedEquity),
                     valuesHidden: model.valuesHidden,
                     onToggleVisibility: model.toggleValuesHidden
                 )
@@ -211,27 +284,25 @@ private struct DashboardView: View {
             }
 
             PositionsCard(model: model)
+        }
+    }
+}
 
-            Divider()
-            HStack(spacing: 8) {
-                Button {
-                    // Hide the popover before opening Settings moves focus to another window.
-                    menuWindowAnchor.window?.orderOut(nil)
-                    openSettings()
-                    NSApp.activate(ignoringOtherApps: true)
-                } label: {
-                    Label("Settings", systemImage: "gearshape")
-                }
-                .buttonStyle(.bordered)
-                .controlSize(.small)
-                Spacer()
-                Button {
-                    NSApp.terminate(nil)
-                } label: {
-                    Label("Quit", systemImage: "power")
-                }
-                .buttonStyle(.borderless)
-                .controlSize(.small)
+private struct MenuControls: View {
+    @State private var menuWindowAnchor = NSView()
+    @Environment(\.openSettings) private var openSettings
+
+    var body: some View {
+        HStack(spacing: 8) {
+            ActionButton(title: "Settings", symbol: "gearshape") {
+                // Hide the popover before opening Settings moves focus to another window.
+                menuWindowAnchor.window?.orderOut(nil)
+                openSettings()
+                NSApp.activate(ignoringOtherApps: true)
+            }
+            Spacer()
+            ActionButton(title: "Quit", symbol: "power", bordered: false) {
+                NSApp.terminate(nil)
             }
         }
         .background(MenuWindowAnchor(view: menuWindowAnchor).frame(width: 0, height: 0))
@@ -524,16 +595,8 @@ private struct CopytraderPositionsGroup: View {
             }
             .padding(.top, 6)
 
-            if !copytrader.activeAlarms.isEmpty {
-                Text(valuesHidden
-                     ? "Alerts active"
-                     : "\(copytrader.activeAlarms.count) alert\(copytrader.activeAlarms.count == 1 ? "" : "s")")
-                    .font(.caption2.weight(.semibold))
-                    .foregroundStyle(.orange)
-            }
-
-            ForEach(copytrader.activeAlarms.indices, id: \.self) { index in
-                Label(valuesHidden ? "Alert active" : copytrader.activeAlarms[index].displayMessage,
+            ForEach(copytrader.activeAlarms.indices.prefix(valuesHidden ? 1 : copytrader.activeAlarms.count), id: \.self) { index in
+                Label(valuesHidden ? "Alerts active" : copytrader.activeAlarms[index].displayMessage,
                       systemImage: "exclamationmark.triangle.fill")
                     .font(.caption)
                     .foregroundStyle(.orange)
@@ -678,14 +741,14 @@ struct SettingsWindow: View {
                         Text("Selected equity")
                             .font(.subheadline)
                             .foregroundStyle(.secondary)
-                        Text(displayedValue(Money.whole(model.selectedEquity), hidden: model.valuesHidden))
+                        Text(displayedValue(Money.twoDecimals(model.selectedEquity), hidden: model.valuesHidden))
                             .font(.system(size: 28, weight: .semibold, design: .rounded))
                             .monospacedDigit()
                     }
                     Spacer()
                     VStack(alignment: .trailing, spacing: 4) {
                         Text("Total account equity")
-                        Text(displayedValue(Money.whole(model.totalEquity), hidden: model.valuesHidden))
+                        Text(displayedValue(Money.twoDecimals(model.totalEquity), hidden: model.valuesHidden))
                             .monospacedDigit()
                     }
                     .font(.subheadline)
@@ -736,6 +799,8 @@ struct SettingsWindow: View {
 
     private var general: some View {
         Form {
+            LoginItemSettings()
+
             Section {
                 LabeledContent("Mirrorly account") {
                     Text(model.sessionState == .signedIn ? "Signed in" : "Not signed in")
@@ -747,7 +812,7 @@ struct SettingsWindow: View {
                     }
                 }
                 LabeledContent("Session") {
-                    Button("Sign Out") { Task { await model.signOut() } }
+                    ActionButton(title: "Sign Out") { Task { await model.signOut() } }
                         .disabled(model.sessionState != .signedIn)
                 }
             } header: {
@@ -760,7 +825,7 @@ struct SettingsWindow: View {
                         .foregroundStyle(.secondary)
                 }
                 LabeledContent("Software updates") {
-                    Button("Check for Updates…", action: updater.checkForUpdates)
+                    ActionButton(title: "Check for Updates…", action: updater.checkForUpdates)
                         .disabled(!updater.canCheckForUpdates)
                 }
             } header: {
@@ -803,7 +868,7 @@ private struct SettingsCopytraderRow: View {
                     }
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
-                Text(displayedValue(Money.whole(copytrader.equity), hidden: model.valuesHidden))
+                Text(displayedValue(Money.twoDecimals(copytrader.equity), hidden: model.valuesHidden))
                     .frame(width: 94, alignment: .trailing)
                 Text(displayedValue(Money.signed(copytrader.unrealizedPnL), hidden: model.valuesHidden))
                     .foregroundStyle(model.valuesHidden ? .primary : pnlColor(copytrader.unrealizedPnL, in: colorScheme))
@@ -814,8 +879,8 @@ private struct SettingsCopytraderRow: View {
             .padding(.horizontal, 16)
             .padding(.vertical, 14)
 
-            ForEach(copytrader.activeAlarms.indices, id: \.self) { index in
-                Label(model.valuesHidden ? "Alert active" : copytrader.activeAlarms[index].displayMessage,
+            ForEach(copytrader.activeAlarms.indices.prefix(model.valuesHidden ? 1 : copytrader.activeAlarms.count), id: \.self) { index in
+                Label(model.valuesHidden ? "Alerts active" : copytrader.activeAlarms[index].displayMessage,
                       systemImage: "exclamationmark.triangle.fill")
                     .font(.caption)
                     .foregroundStyle(.orange)
@@ -825,5 +890,54 @@ private struct SettingsCopytraderRow: View {
             }
             Divider()
         }
+    }
+}
+
+private struct LoginItemSettings: View {
+    @State private var status = SMAppService.mainApp.status
+    @State private var errorMessage: String?
+
+    var body: some View {
+        Section {
+            Toggle("Open at login", isOn: Binding(
+                get: { status == .enabled },
+                set: setEnabled
+            ))
+            if status == .requiresApproval {
+                Text("Allow MacMirrorly in System Settings to open at login.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                ActionButton(title: "Open Login Items Settings") {
+                    SMAppService.openSystemSettingsLoginItems()
+                }
+            }
+            if let errorMessage {
+                WarningBanner(message: errorMessage, isError: true)
+            }
+        } header: {
+            Text("Startup")
+        }
+        .onAppear { status = SMAppService.mainApp.status }
+        .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
+            status = SMAppService.mainApp.status
+        }
+    }
+
+    private func setEnabled(_ enabled: Bool) {
+        errorMessage = nil
+        do {
+            if enabled {
+                if SMAppService.mainApp.status == .requiresApproval {
+                    SMAppService.openSystemSettingsLoginItems()
+                } else {
+                    try SMAppService.mainApp.register()
+                }
+            } else {
+                try SMAppService.mainApp.unregister()
+            }
+        } catch {
+            errorMessage = "Could not change Open at login. " + error.localizedDescription
+        }
+        status = SMAppService.mainApp.status
     }
 }

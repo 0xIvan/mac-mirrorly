@@ -27,6 +27,8 @@ Version 1.0.1 and earlier need one manual DMG installation to gain the updater.
 - Open copied positions grouped by copytrader: direction, symbol, trader, notional size, status, and unrealized PnL
 - Active copytrader alarms and non-enabled modes in the menu
 - Settings window with per-user copytrader selection, total and selected equity, exchange, mode, and unrealized PnL
+- Optional **Open at login** in Settings → General → Startup
+- Settings and Quit available while checking your session, offline, or signed out
 - Direct link to the Mirrorly portal
 
 The menu bar, window, and app icon use the Mirrorly mark from `Mirrorly-UI/public/favicon.svg`. The app icon places the primary-color mark on a warm ivory, standard-radius background matching Hago's icon.
