@@ -1,4 +1,5 @@
-## MacMirrorly 1.0.6
+## MacMirrorly 1.0.7
 
-- Draw the menu-bar panel edge to edge with native glass on macOS 26 and a native menu background on earlier macOS versions.
-- Keep the panel anchored to the menu bar as its content changes, and dismiss it with Escape or by clicking outside.
+- Match the menu panel shadow to its rounded corners, including after resizing.
+- Place the last update time beneath the app name.
+- Group Refresh, Settings, and Quit into one compact footer.
