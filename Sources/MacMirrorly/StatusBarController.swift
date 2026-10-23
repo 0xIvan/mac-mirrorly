@@ -58,6 +58,7 @@ final class StatusBarController: NSObject, NSWindowDelegate {
         button.highlight(true)
         NSApp.activate(ignoringOtherApps: true)
         panel.makeKeyAndOrderFront(nil)
+        panel.invalidateShadow()
         outsideClickMonitor = NSEvent.addGlobalMonitorForEvents(matching: [.leftMouseDown, .rightMouseDown]) { [weak self] _ in
             MainActor.assumeIsolated { self?.panel.orderOut(nil) }
         }
@@ -69,6 +70,7 @@ final class StatusBarController: NSObject, NSWindowDelegate {
         frame.origin.y += frame.height - size.height
         frame.size = size
         panel.setFrame(frame, display: panel.isVisible)
+        panel.invalidateShadow()
     }
 
     private func didClose() {
@@ -157,7 +159,12 @@ private final class MenuPanel: NSPanel {
             background = effect
         }
         // Content sits beside the glass, not inside it: as glass content it is rendered monochrome and loses the P&L colours.
+        // The window shadow follows the drawn alpha, which is square under the glass unless the whole panel is clipped.
         let container = NSView()
+        container.wantsLayer = true
+        container.layer?.cornerRadius = cornerRadius
+        container.layer?.cornerCurve = .continuous
+        container.layer?.masksToBounds = true
         for subview in [background, view] {
             subview.frame = container.bounds
             subview.autoresizingMask = [.width, .height]

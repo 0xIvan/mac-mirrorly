@@ -104,21 +104,7 @@ struct MenuPopover: View {
                 DashboardView(model: model)
             }
             Divider()
-            if model.sessionState == .signedIn {
-                HStack(spacing: 8) {
-                    if let lastUpdated = model.lastUpdated {
-                        Text("Updated \(lastUpdated.formatted(.dateTime.hour(.twoDigits(amPM: .omitted)).minute(.twoDigits)))")
-                    } else {
-                        Text("Not updated yet")
-                    }
-                    Spacer()
-                    ActionButton(title: model.isRefreshing ? "Refreshing…" : "Refresh") {
-                        Task { await model.refresh() }
-                    }
-                    .disabled(model.isRefreshing)
-                }
-            }
-            MenuControls()
+            MenuControls(model: model)
         }
         .padding(16)
         .frame(width: 284)
@@ -127,6 +113,7 @@ struct MenuPopover: View {
 
 private struct BrandHeader: View {
     var showPortalLink = false
+    var subtitle: String?
 
     var body: some View {
         HStack(spacing: 9) {
@@ -136,8 +123,15 @@ private struct BrandHeader: View {
                 .scaledToFit()
                 .foregroundStyle(Palette.accent)
                 .frame(width: 32, height: 32)
-            Text("MacMirrorly")
-                .font(.headline)
+            VStack(alignment: .leading, spacing: 1) {
+                Text("MacMirrorly")
+                    .font(.headline)
+                if let subtitle {
+                    Text(subtitle)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+            }
             Spacer()
             if showPortalLink {
                 Link("Portal ↗", destination: URL(string: "https://portal.mirrorly.xyz/")!)
@@ -263,7 +257,12 @@ private struct DashboardView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
-            BrandHeader(showPortalLink: true)
+            BrandHeader(
+                showPortalLink: true,
+                subtitle: model.lastUpdated.map {
+                    "Updated \($0.formatted(.dateTime.hour(.twoDigits(amPM: .omitted)).minute(.twoDigits)))"
+                } ?? "Not updated yet"
+            )
             if let dataWarning = model.dataWarning {
                 WarningBanner(message: dataWarning, isError: model.refreshError != nil)
             }
@@ -289,11 +288,18 @@ private struct DashboardView: View {
 }
 
 private struct MenuControls: View {
+    @ObservedObject var model: AppModel
     @State private var menuWindowAnchor = NSView()
     @Environment(\.openSettings) private var openSettings
 
     var body: some View {
         HStack(spacing: 8) {
+            if model.sessionState == .signedIn {
+                ActionButton(title: model.isRefreshing ? "Refreshing…" : "Refresh", symbol: "arrow.clockwise") {
+                    Task { await model.refresh() }
+                }
+                .disabled(model.isRefreshing)
+            }
             ActionButton(title: "Settings", symbol: "gearshape") {
                 // Hide the popover before opening Settings moves focus to another window.
                 menuWindowAnchor.window?.orderOut(nil)
