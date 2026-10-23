@@ -117,12 +117,11 @@ private struct BrandHeader: View {
 
     var body: some View {
         HStack(spacing: 9) {
-            Image("MirrorlyMark")
-                .renderingMode(.template)
+            Image("AppIconTile")
                 .resizable()
-                .scaledToFit()
-                .foregroundStyle(Palette.accent)
+                .interpolation(.high)
                 .frame(width: 32, height: 32)
+                .accessibilityHidden(true)
             VStack(alignment: .leading, spacing: 1) {
                 Text("MacMirrorly")
                     .font(.headline)
